@@ -14,7 +14,6 @@
 #pragma once
 
 #include <simobject.h>
-#include "mem_sim.h"
 
 namespace vortex {
 
