@@ -19,6 +19,7 @@
 #include "util.h"
 #include <VX_config.h>
 #include <bitset>
+#include <regex>
 
 using namespace vortex;
 
@@ -589,6 +590,54 @@ void RAM::loadHexImage(const char* filename) {
     ++line;
     --size;
   }
+}
+
+void RAM::loadDumpImage(const char* filename, uint64_t destination) {
+    std::ifstream input_file(filename);
+    if (!input_file.is_open()) {
+        return;
+    }
+
+    std::string line;
+    std::vector<unsigned char> bytes;
+    int i = 0;
+    this->clear();
+    const std::regex address_regex("^8[0-9a-fA-F]{7}:$");
+
+    while (std::getline(input_file, line)) {
+        std::istringstream line_stream(line);
+        std::string token;
+
+        line_stream >> token;
+        
+        if (!std::regex_match(token, address_regex)) {
+            continue;
+        }
+
+        std::string hex_byte_str;
+        int j = 0;
+
+        while (line_stream >> hex_byte_str) {
+            if (j >= 4) {
+              break;
+            }
+            if (hex_byte_str.length() == 2) {
+                unsigned int byte_val;
+                std::stringstream ss;
+                // Set the stream to parse as hexadecimal
+                ss << std::hex << hex_byte_str;
+                ss >> byte_val;
+                if (byte_val > 0xFF) {
+                    break;
+                }
+                *this->get(destination + i) = (uint8_t)byte_val;
+                i++;
+            } else {
+                break;
+            }
+            j++;
+        }
+    }
 }
 
 #ifdef VM_ENABLE

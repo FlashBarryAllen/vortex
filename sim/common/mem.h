@@ -373,6 +373,7 @@ public:
 
   void loadBinImage(const char* filename, uint64_t destination);
   void loadHexImage(const char* filename);
+  void loadDumpImage(const char* filename, uint64_t destination);
 
   uint8_t& operator[](uint64_t address) {
     return *this->get(address);
