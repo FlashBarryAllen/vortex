@@ -600,7 +600,6 @@ void RAM::loadDumpImage(const char* filename, uint64_t destination) {
 
     std::string line;
     std::vector<unsigned char> bytes;
-    int i = 0;
     this->clear();
     const std::regex address_regex("^8[0-9a-fA-F]{7}:$");
 
@@ -614,13 +613,15 @@ void RAM::loadDumpImage(const char* filename, uint64_t destination) {
             continue;
         }
 
+        token.pop_back(); // 去掉冒号
+        uint64_t addr = std::stoull(token, nullptr, 16);
+        assert(addr >= destination);
+
         std::string hex_byte_str;
+        int i = 0;
         int j = 0;
 
         while (line_stream >> hex_byte_str) {
-            if (j >= 4) {
-              break;
-            }
             if (hex_byte_str.length() == 2) {
                 unsigned int byte_val;
                 std::stringstream ss;
@@ -630,12 +631,16 @@ void RAM::loadDumpImage(const char* filename, uint64_t destination) {
                 if (byte_val > 0xFF) {
                     break;
                 }
-                *this->get(destination + i) = (uint8_t)byte_val;
+                *this->get(addr + i) = (uint8_t)byte_val;
                 i++;
             } else {
                 break;
             }
+
             j++;
+            if (j >= 4) {
+              break;
+            }
         }
     }
 }
