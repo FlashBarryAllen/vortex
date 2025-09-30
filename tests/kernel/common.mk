@@ -36,6 +36,9 @@ $(PROJECT).dump: $(PROJECT).elf
 $(PROJECT).bin: $(PROJECT).elf
 	$(CP) -O binary $< $@
 
+$(PROJECT).hex: $(PROJECT).elf
+	$(CP) -O ihex $< $@
+
 $(PROJECT).elf: $(SRCS)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
@@ -49,4 +52,4 @@ run-simx: $(PROJECT).bin
 	$(CC) $(CFLAGS) -MM $^ > .depend;
 
 clean:
-	rm -rf *.elf *.bin *.dump *.log .depend
+	rm -rf *.elf *.bin *.dump *.hex *.log .depend
