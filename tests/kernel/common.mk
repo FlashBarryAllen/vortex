@@ -28,7 +28,7 @@ LIBC_LIB += $(LIBCRT_VORTEX)/lib/baremetal/libclang_rt.builtins-riscv$(XLEN).a
 
 LDFLAGS += -Wl,-Bstatic,--gc-sections,-T,$(VORTEX_HOME)/kernel/scripts/link$(XLEN).ld,--defsym=STARTUP_ADDR=$(STARTUP_ADDR) $(VORTEX_KN_PATH)/libvortex.a $(LIBC_LIB)
 
-all: $(PROJECT).elf $(PROJECT).bin $(PROJECT).dump
+all: $(PROJECT).elf $(PROJECT).bin $(PROJECT).dump $(PROJECT).hex
 
 $(PROJECT).dump: $(PROJECT).elf
 	$(DP) -D $< > $@
