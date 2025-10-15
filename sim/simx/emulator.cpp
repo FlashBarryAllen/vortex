@@ -153,6 +153,7 @@ instr_trace_t* Emulator::step() {
   int scheduled_warp = -1;
 
   // process pending wspawn
+  /*
   if (wspawn_.valid && active_warps_.count() == 1) {
     DP(3, "*** Activate " << (wspawn_.num_warps-1) << " warps at PC: " << std::hex << wspawn_.nextPC << std::dec);
     for (uint32_t i = 1; i < wspawn_.num_warps; ++i) {
@@ -164,8 +165,10 @@ instr_trace_t* Emulator::step() {
     wspawn_.valid = false;
     stalled_warps_.reset(0);
   }
+  */
 
   // find next ready warp
+  /*
   for (size_t wid = 0, nw = arch_.num_warps(); wid < nw; ++wid) {
     bool warp_active = active_warps_.test(wid);
     bool warp_stalled = stalled_warps_.test(wid);
@@ -174,7 +177,8 @@ instr_trace_t* Emulator::step() {
       break;
     }
   }
-
+  */
+  scheduled_warp = 0;
   if (scheduled_warp == -1)
     return nullptr;
 
@@ -211,6 +215,7 @@ instr_trace_t* Emulator::step() {
 
   // Execute
   auto trace = this->execute(*instr, scheduled_warp);
+  trace = nullptr;
 
   return trace;
 }

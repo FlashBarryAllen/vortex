@@ -613,7 +613,7 @@ void RAM::loadDumpImage(const char* filename, uint64_t destination) {
             continue;
         }
 
-        token.pop_back(); // 去掉冒号
+        token.pop_back();
         uint64_t addr = std::stoull(token, nullptr, 16);
         assert(addr >= destination);
 
@@ -625,7 +625,6 @@ void RAM::loadDumpImage(const char* filename, uint64_t destination) {
             if (hex_byte_str.length() == 2) {
                 unsigned int byte_val;
                 std::stringstream ss;
-                // Set the stream to parse as hexadecimal
                 ss << std::hex << hex_byte_str;
                 ss >> byte_val;
                 if (byte_val > 0xFF) {
