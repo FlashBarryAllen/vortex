@@ -86,12 +86,8 @@
 `endif
 `endif
 
-`ifdef EXT_V_ENABLE
 `ifndef VLEN
 `define VLEN (4 * `XLEN)
-`endif
-`else
-`define VLEN `XLEN
 `endif
 
 `ifndef NUM_CLUSTERS
@@ -291,7 +287,7 @@
 `define MEM_PAGE_LOG2_SIZE (12)
 `endif
 
-// Virtual Memory Configuration ///////////////////////////////////////////////////////
+// Virtual Memory Configuration ///////////////////////////////////////////////
 `ifdef VM_ENABLE
     `ifdef XLEN_32
         `ifndef VM_ADDR_MODE
@@ -340,7 +336,7 @@
 // Pipeline Configuration /////////////////////////////////////////////////////
 
 `ifndef SIMD_WIDTH
-`define SIMD_WIDTH      `MIN(`NUM_THREADS, 16)
+`define SIMD_WIDTH      `NUM_THREADS
 `endif
 
 // Issue width
@@ -350,10 +346,7 @@
 
 // Operand collectors
 `ifndef NUM_OPCS
-`define NUM_OPCS        `MIN(4, `NUM_WARPS / `ISSUE_WIDTH)
-`endif
-`ifndef NUM_VOPCS
-`define NUM_VOPCS       1
+`define NUM_OPCS        `UP(`NUM_WARPS / (4 * `ISSUE_WIDTH))
 `endif
 
 // Register File Banks
@@ -803,6 +796,7 @@
 
 // TCU Configurable Knobs /////////////////////////////////////////////////////
 
+`ifndef TCU_DRL
 `ifndef TCU_BHF
 `ifndef TCU_DSP
 `ifndef TCU_DPI
@@ -817,6 +811,7 @@
 `define TCU_DSP
 `endif
 
+`endif
 `endif
 `endif
 `endif

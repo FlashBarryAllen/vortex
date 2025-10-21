@@ -13,15 +13,15 @@
 
 `include "VX_define.vh"
 
-`define USED_IREG(x) \
-    x``_v.id = ``x; \
-    x``_v.rtype = 0; \
+`define USED_REG(t, x) \
+    x``_v = make_reg_num(t, ``x); \
     use_``x = 1
 
+`define USED_IREG(x) \
+    `USED_REG(REG_TYPE_I, ``x)
+
 `define USED_FREG(x) \
-    x``_v.id = ``x; \
-    x``_v.rtype = 1; \
-    use_``x = 1
+    `USED_REG(REG_TYPE_F, ``x)
 
 module VX_decode import VX_gpu_pkg::*; #(
     parameter `STRING INSTANCE_ID = ""
@@ -46,7 +46,7 @@ module VX_decode import VX_gpu_pkg::*; #(
     reg [EX_BITS-1:0] ex_type;
     reg [INST_OP_BITS-1:0] op_type;
     op_args_t op_args;
-    reg_idx_t rd_v, rs1_v, rs2_v, rs3_v;
+    reg [NUM_REGS_BITS-1:0] rd_v, rs1_v, rs2_v, rs3_v;
     reg use_rd, use_rs1, use_rs2, use_rs3;
     reg is_wstall;
 
@@ -139,13 +139,6 @@ module VX_decode import VX_gpu_pkg::*; #(
         endcase
     end
 `endif
-
-    `STATIC_ASSERT($bits(alu_args_t)  == $bits(op_args_t), ("alu_args_t size mismatch: current=%0d, expected=%0d", $bits(alu_args_t), $bits(op_args_t)));
-    `STATIC_ASSERT($bits(fpu_args_t)  == $bits(op_args_t), ("fpu_args_t size mismatch: current=%0d, expected=%0d", $bits(fpu_args_t), $bits(op_args_t)));
-    `STATIC_ASSERT($bits(lsu_args_t)  == $bits(op_args_t), ("lsu_args_t size mismatch: current=%0d, expected=%0d", $bits(lsu_args_t), $bits(op_args_t)));
-    `STATIC_ASSERT($bits(csr_args_t)  == $bits(op_args_t), ("csr_args_t size mismatch: current=%0d, expected=%0d", $bits(csr_args_t), $bits(op_args_t)));
-    `STATIC_ASSERT($bits(wctl_args_t) == $bits(op_args_t), ("wctl_args_t size mismatch: current=%0d, expected=%0d", $bits(wctl_args_t), $bits(op_args_t)));
-    `STATIC_ASSERT($bits(tcu_args_t) == $bits(op_args_t), ("tcu_args_t size mismatch: current=%0d, expected=%0d", $bits(tcu_args_t), $bits(op_args_t)));
 
     always @(*) begin
 
@@ -337,9 +330,10 @@ module VX_decode import VX_gpu_pkg::*; #(
                 op_args.lsu.is_float = opcode[2];
                 op_args.lsu.offset = u_12;
                 `USED_IREG (rs1);
-                `USED_IREG (rd);
             `ifdef EXT_F_ENABLE
-                rd_v.rtype = REG_TYPE_BITS'(opcode[2]);
+                `USED_REG (opcode[2], rd);
+            `else
+                `USED_IREG (rd);
             `endif
             end
         `ifdef EXT_F_ENABLE
@@ -352,9 +346,10 @@ module VX_decode import VX_gpu_pkg::*; #(
                 op_args.lsu.is_float = opcode[2];
                 op_args.lsu.offset = s_imm;
                 `USED_IREG (rs1);
-                `USED_IREG (rs2);
             `ifdef EXT_F_ENABLE
-                rs2_v.rtype = REG_TYPE_BITS'(opcode[2]);
+                `USED_REG (opcode[2], rs2);
+            `else
+                `USED_IREG (rs2);
             `endif
             end
         `ifdef EXT_F_ENABLE

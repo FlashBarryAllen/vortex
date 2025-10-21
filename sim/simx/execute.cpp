@@ -143,7 +143,7 @@ instr_trace_t* Emulator::execute(const Instr &instr, uint32_t wid) {
   std::vector<reg_data_t> rs3_data;
 
   DP(1, "Instr: " << instr << ", cid=" << core_->id() << ", wid=" << wid << ", tmask=" << warp.tmask
-         << ", PC=0x" << std::hex << warp.PC << std::dec << "(#" << instr.getUUID() << ")");
+         << ", PC=0x" << std::hex << warp.PC << std::dec << " (#" << instr.getUUID() << ")");
 
   // fetch register values
   if (rsrc0.type != RegType::None) fetch_registers(rs1_data, wid, 0, rsrc0);
@@ -1276,7 +1276,7 @@ instr_trace_t* Emulator::execute(const Instr &instr, uint32_t wid) {
             continue;
           Word csr_value = this->get_csr(csr_addr, wid, t);
           auto src_data = csrArgs.is_imm ? csrArgs.imm : rs1_data[t].i;
-          this->set_csr(csr_addr, src_data, t, wid);
+          this->set_csr(csr_addr, src_data, wid, t);
           rd_data[t].i = csr_value;
         }
       } break;
@@ -1287,7 +1287,7 @@ instr_trace_t* Emulator::execute(const Instr &instr, uint32_t wid) {
           Word csr_value = this->get_csr(csr_addr, wid, t);
           auto src_data = csrArgs.is_imm ? csrArgs.imm : rs1_data[t].i;
           if (src_data != 0) {
-            this->set_csr(csr_addr, csr_value | src_data, t, wid);
+            this->set_csr(csr_addr, csr_value | src_data, wid, t);
           }
           rd_data[t].i = csr_value;
         }
@@ -1299,7 +1299,7 @@ instr_trace_t* Emulator::execute(const Instr &instr, uint32_t wid) {
           Word csr_value = this->get_csr(csr_addr, wid, t);
           auto src_data = csrArgs.is_imm ? csrArgs.imm : rs1_data[t].i;
           if (src_data != 0) {
-            this->set_csr(csr_addr, csr_value & ~src_data, t, wid);
+            this->set_csr(csr_addr, csr_value & ~src_data, wid, t);
           }
           rd_data[t].i = csr_value;
         }

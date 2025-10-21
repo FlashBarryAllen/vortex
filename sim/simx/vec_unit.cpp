@@ -48,7 +48,7 @@ public:
     for (uint32_t iw = 0; iw < ISSUE_WIDTH; ++iw) {
       auto &input = simobject_->Inputs.at(iw);
       if (input.empty())
-        return;
+        continue;
 
       auto trace = input.front();
       auto trace_data = std::dynamic_pointer_cast<ExeTraceData>(trace->data);
@@ -63,7 +63,7 @@ public:
         delay = 1;
         break;
       case VpuOpType::IMUL:
-        delay = 2;
+        delay = 3;
         break;
       case VpuOpType::IDIV:
         delay = XLEN;
@@ -531,7 +531,7 @@ public:
     uint32_t rsrc0 = instr.getSrcReg(0).idx;
     uint32_t rsrc1 = instr.getSrcReg(1).idx;
 
-    VpuOpType vpu_op;
+    VpuOpType vpu_op = VpuOpType::ARITH;
 
     auto vop_type = std::get<VopType>(op_type);
     auto vopArgs = std::get<IntrVopArgs>(instrArgs);

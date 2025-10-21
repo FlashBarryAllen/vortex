@@ -26,6 +26,7 @@
 using namespace vortex;
 namespace vt = tensor;
 
+static bool g_enable_sparse = false;
 ///////////////////////////////////////////////////////////////////////////////
 
 static void convert_row_to_col_major_4bit(uint8_t *dst, uint32_t width, uint32_t height, const uint8_t *src) {
@@ -235,6 +236,24 @@ public:
 };
 
 template <>
+class Comparator<vt::tf32> {
+public:
+  static uint32_t generate() {
+    auto fvalue = float(rand()) / RAND_MAX;
+    return rv_ftox_s(bit_cast<uint32_t>(fvalue), 8, 10, 0, nullptr);
+  }
+  static bool compare(uint32_t a, uint32_t b, int index, int errors) {
+    if (a != b) {
+      if (errors < MAX_ERRORS) {
+        printf("*** error: [%d] expected=0x%x, actual=0x%x\n", index, b, a);
+      }
+      return false;
+    }
+    return true;
+  }
+};
+
+template <>
 class Comparator<vt::fp32> {
 public:
   static float generate() {
@@ -311,6 +330,15 @@ struct muladd_t<vt::bf16, vt::bf16> {
 };
 
 template <>
+struct muladd_t<vt::tf32, vt::fp32> {
+  static float eval(uint32_t a, uint32_t b, float c) {
+    auto fa = bit_cast<float>(rv_xtof_s(a, 8, 10, 0, nullptr));
+    auto fb = bit_cast<float>(rv_xtof_s(b, 8, 10, 0, nullptr));
+    return fa * fb + c;
+  }
+};
+
+template <>
 struct muladd_t<vt::int4, vt::int32> {
   static int32_t eval(uint8_t a, uint8_t b, int32_t c) {
     int32_t a_val = a & 0xF;
@@ -341,6 +369,15 @@ using cfg = vt::wmma_config_t<NUM_THREADS, vt::ITYPE, vt::OTYPE>;
 using itype_t = typename vt::ITYPE::dtype;
 using otype_t = typename vt::OTYPE::dtype;
 
+struct SparseMat {
+  std::vector<itype_t> values;   // non-zeros
+  std::vector<uint8_t> meta;     // Array of row-masks: 1 byte marks the columns
+                                  // of the 4 elements in the block that are non-zero.
+                                  // e.g. 0b0101 means 2nd and 4th elements are non-zero.
+
+  uint32_t rows, cols;           // original A dims (M × K)
+};
+
 static void matmul_cpu(otype_t *C, const itype_t *A, const itype_t *B, uint32_t M, uint32_t N, uint32_t K) {
   uint32_t subbytes = 8 / vt::ITYPE::bits;
   uint32_t KS = subbytes ? (K * subbytes) : K;
@@ -361,9 +398,9 @@ static void matmul_cpu(otype_t *C, const itype_t *A, const itype_t *B, uint32_t 
 
 const char *kernel_file = "kernel.vxbin";
 
-uint32_t xm = 4;
-uint32_t xn = 8;
-uint32_t xk = 2;
+uint32_t xm = 32;
+uint32_t xn = 32;
+uint32_t xk = 32;
 
 vx_device_h device = nullptr;
 vx_buffer_h A_buffer = nullptr;
@@ -377,12 +414,13 @@ std::string last_build_options;
 
 static void show_usage() {
   std::cout << "Vortex Sgemm TCU Test." << std::endl;
-  std::cout << "Usage: [-m: m] [-n N] [-k: K] [-h: help]" << std::endl;
+  std::cout << "Usage: [-m: m] [-n N] [-k: K] [-s] [-h: help]" << std::endl;
+  std::cout << "  -s  Enable 2:4 structured sparsity " << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "m:n:k:i:o:h")) != -1) {
+  while ((c = getopt(argc, argv, "m:n:k:i:o:hs")) != -1) {
     switch (c) {
     case 'm':
       xm = atoi(optarg);
@@ -392,6 +430,10 @@ static void parse_args(int argc, char **argv) {
       break;
     case 'k':
       xk = atoi(optarg);
+      break;
+    case 's':
+      g_enable_sparse = true;
+      std::cout << "Sparse mode enabled (-s)" << std::endl;
       break;
     case 'h':
       show_usage();
@@ -415,9 +457,73 @@ void cleanup() {
   }
 }
 
+
+static SparseMat pruneAndCompressMatrixA(const std::vector<itype_t>& denseA,
+                                         uint32_t M, uint32_t K) {
+  SparseMat out;
+  out.rows = M;
+  out.cols = K;
+  out.values.reserve(M * K / 2); // Select 2 values every 4 values
+  out.meta.reserve(M * K / 4); // 1 byte for every 4 values
+
+  const itype_t* src = denseA.data();
+
+  for (uint32_t r = 0; r < M; ++r) {
+    for (uint32_t c = 0; c < K; c += 4) {
+      itype_t blk[4] = {src[r * K + c],
+                        src[r * K + c + 1],
+                        src[r * K + c + 2],
+                        src[r * K + c + 3]};
+
+      uint32_t idx[4] = {0, 1, 2, 3};
+      std::sort(idx, idx + 4,
+        [&](uint32_t a, uint32_t b) {
+          return std::abs((int)blk[a]) < std::abs((int)blk[b]);
+        }); //Sort the 4 elements by absolute value, ascending order
+
+      uint8_t keep0 = idx[3];
+      uint8_t keep1 = idx[2]; //idx of largest 2 elements
+
+      out.values.push_back(blk[keep0]);
+      out.values.push_back(blk[keep1]);
+
+      uint8_t m = (1u << keep0) | (1u << keep1);  // e.g. 0b0101
+      out.meta.push_back(m);
+    }
+  }
+  return out;
+}
+
+void test_pruneA() {
+  const uint32_t M = 4, K = 8;
+  std::vector<itype_t> denseA(M * K);
+  for (auto& v : denseA) v = Comparator<vt::ITYPE>::generate();
+
+  auto spA = pruneAndCompressMatrixA(denseA, M, K);
+
+  std::vector<itype_t> recovered(M * K, 0);
+  size_t v_idx = 0, m_idx = 0;
+  for (uint32_t r = 0; r < M; ++r)
+    for (uint32_t c = 0; c < K; c += 4) {
+      uint8_t m = spA.meta[m_idx++];
+      for (uint32_t i = 0; i < 4; ++i)
+        if (m & (1u << i))
+          recovered[r * K + c + i] = spA.values[v_idx++];
+    }
+
+  for (uint32_t i = 0; i < M * K; ++i)
+    assert(recovered[i] == denseA[i] || recovered[i] == 0); //Either the value is preserved or pruned
+  std::cout << "pruneAndCompressMatrixA passed\n";
+}
+
+
 int main(int argc, char *argv[]) {
   // parse command arguments
   parse_args(argc, argv);
+
+  if(g_enable_sparse) {
+    test_pruneA(); // Test the pruning function
+  }
 
   std::srand(50);
 
@@ -441,9 +547,9 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  uint32_t M = xm * cfg::tileM;
-  uint32_t N = xn * cfg::tileN;
-  uint32_t K = xk = cfg::tileK;
+  uint32_t M = xm;
+  uint32_t N = xn;
+  uint32_t K = xk;
 
   if ((M % cfg::tileM) != 0) {
     std::cout << "Error: M must be a multiple of tensor tileM!" << std::endl;

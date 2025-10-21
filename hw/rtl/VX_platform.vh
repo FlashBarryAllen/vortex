@@ -26,8 +26,15 @@
 
 `define STATIC_ASSERT(cond, msg) \
     /* verilator lint_off GENUNNAMED */ \
-    if (!(cond)) $error msg; \
-    /* verilator lint_on GENUNNAMED */ \
+    initial if (!(cond)) begin \
+        $error msg; \
+    end \
+    /* verilator lint_on GENUNNAMED */
+
+`define PACKAGE_ASSERT(cond) \
+    /* verilator lint_on UNUSED */ \
+    typedef bit [((cond) ? 0 : -1) : 0] static_assertion_at_line_`__LINE__; \
+    /* verilator lint_off UNUSED */
 
 `define ERROR(msg) \
     $error msg
@@ -131,6 +138,7 @@
 `else // SYNTHESIS
 
 `define STATIC_ASSERT(cond, msg)
+`define PACKAGE_ASSERT(cond)
 `define ERROR(msg)                  //
 `define ASSERT(cond, msg)           //
 `define RUNTIME_ASSERT(cond, msg)
